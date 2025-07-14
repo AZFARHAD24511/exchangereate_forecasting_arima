@@ -30,8 +30,7 @@ github_trends_url = (
 )
 KEYWORDS = ['خرید دلار', 'فروش دلار', 'دلار فردایی']
 
-# Function to load historical USD data
-@st.cache_data(ttl=3600)
+# Load historical USD data
 def load_usd_data():
     ts = int(datetime.now().timestamp() * 1000)
     url = (
@@ -43,9 +42,7 @@ def load_usd_data():
     records = []
     for row in data:
         try:
-            price = float(
-                re.sub(r'<[^>]*>', '', row[0]).replace(',', '')
-            )
+            price = float(re.sub(r'<[^>]*>', '', row[0]).replace(',', ''))
             date = datetime.strptime(row[6], "%Y/%m/%d")
             records.append({'date': date, 'price': price})
         except:
@@ -53,14 +50,13 @@ def load_usd_data():
     df = pd.DataFrame(records).set_index('date').sort_index()
     return df
 
-# Function to load Google Trends data
-@st.cache_data(ttl=3600)
+# Load Google Trends data
 def load_trends_csv():
     r = requests.get(github_trends_url)
     df = pd.read_csv(StringIO(r.text), parse_dates=['date'])
     return df.set_index('date').sort_index()
 
-# Fetch missing trends if any dates missing
+# Fetch missing trend data
 @st.cache_data(ttl=3600, hash_funcs={pd.DatetimeIndex: lambda idx: idx.astype(str).tolist()})
 def fetch_missing_trends(missing_dates, geo='IR'):
     if not isinstance(missing_dates, pd.DatetimeIndex):
@@ -79,15 +75,11 @@ def fetch_missing_trends(missing_dates, geo='IR'):
         return df_new.apply(lambda x: x / x.max() * 100)
     return pd.DataFrame(index=missing_dates)
 
-# Function to load today's data and compute avg of last 5 prices
-@st.cache_data(ttl=300)
+# Load today's data and compute average of last 5 prices
 def load_today_avg():
     url = "https://api.tgju.org/v1/market/indicator/today-table-data/price_dollar_rl"
     params = {
-        "lang": "fa",
-        "draw": 1,
-        "start": 0,
-        "length": 30,
+        "lang": "fa", "draw": 1, "start": 0, "length": 30,
         "today_table_tolerance_open": 1,
         "today_table_tolerance_yesterday": 1,
         "today_table_tolerance_range": "week",
@@ -96,16 +88,11 @@ def load_today_avg():
     resp = requests.get(url, params=params)
     resp.raise_for_status()
     data = resp.json().get('data', [])
-    prices = []
-    for row in data:
-        raw = row[0]
-        clean = int(re.sub(r'<[^>]*>', '', raw).replace(',', ''))
-        prices.append(clean)
-    # prices sorted descending by time, take first 5
+    prices = [int(re.sub(r'<[^>]*>', '', row[0]).replace(',', '')) for row in data]
     last5 = prices[:5]
-    return sum(last5) / len(last5) if last5 else np.nan
+    return float(sum(last5) / len(last5)) if last5 else np.nan
 
-# Load data
+# Load and prepare data
 with st.spinner("در حال بارگذاری داده‌ها..."):
     usd_df = load_usd_data()
     # Append today's average price
@@ -123,7 +110,7 @@ trf = trends_df[trends_df.index >= two_years_ago]
 # Fill missing trend dates
 missing = udf.index.difference(trf.index)
 if not missing.empty:
-    new_tr = fetch_missing_trends(tuple(date.strftime('%Y-%m-%d') for date in missing))
+    new_tr = fetch_missing_trends(missing)
     trf = pd.concat([trf, new_tr]).sort_index()
     trf = trf.reindex(udf.index).ffill().bfill()
 
@@ -151,17 +138,15 @@ split = int(len(X) * 0.9)
 X_train, X_test = X[:split], X[split:]
 y_train, y_test = y[:split], y[split:]
 
-# Build LSTM model
+# Build and train LSTM model
 model = Sequential([
     LSTM(64, input_shape=(SEQ_LEN, 1)),
     Dense(16, activation='relu'),
     Dense(1)
 ])
 model.compile(optimizer='adam', loss='mse')
-
-# Train model
 early = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-history = model.fit(
+model.fit(
     X_train, y_train,
     validation_data=(X_test, y_test),
     epochs=50,
