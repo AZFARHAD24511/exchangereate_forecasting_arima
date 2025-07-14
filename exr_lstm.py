@@ -155,8 +155,10 @@ def forecast_next(model, last_seq, steps=2):
     return np.array(res)
 
 last_sequence = scaled[-SEQ_LEN:]
-forecast_scaled = forecast_next(model, last_sequence, steps=2)
+# پیش‌بینی دو روز آینده و تبدیل به آرایهٔ 2D
+forecast_scaled = forecast_next(model, last_sequence, steps=2).reshape(-1, 1)
 forecast = scaler.inverse_transform(forecast_scaled).flatten()
+
 forecast_dates = [dates[-1] + timedelta(days=i) for i in range(1, 3)]
 
 # Display metrics and forecasts
