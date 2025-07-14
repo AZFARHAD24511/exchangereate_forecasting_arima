@@ -25,7 +25,7 @@ st.title("📈 پیش‌بینی نرخ دلار آزاد با LSTM 📈")
 # Constants
 github_trends_url = (
     'https://raw.githubusercontent.com/AZFARHAD24511/exchange_rates_IRAN/main/'
-    'predict/google_trends_daily.csv'
+    'predict/google_trends_daily_exrusd.csv'
 )
 KEYWORDS = ['خرید دلار', 'فروش دلار', 'دلار فردایی']
 
