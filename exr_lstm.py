@@ -3,71 +3,54 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import requests
+import re
 from datetime import datetime, timedelta
 from io import StringIO
 from pytrends.request import TrendReq
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+import statsmodels.api as sm
+from xgboost import XGBRegressor
+from sklearn.model_selection import TimeSeriesSplit
 
-# پیکربندی صفحه
-st.set_page_config(page_title=" پیش‌بینی نرخ دلار آزاد تهران 📈", layout="wide")
+# Streamlit config
+st.set_page_config(page_title="پیش‌بینی نرخ دلار آزاد با ARIMA + XGBoost 📈", layout="wide")
 st.markdown("""
 ---
 📈 © 2025 Dr. Farhadi. All rights reserved.  
 This application was developed by **Dr. Farhadi**, Ph.D. in *Economics (Econometrics)* and *Data Science*.  
 All trademarks and intellectual property are protected. ™
 """)
-st.title("📈 پیش‌بینی نرخ دلار آزاد (با XGBoost) 📈")
+st.title("📈 پیش‌بینی نرخ دلار آزاد با ARIMA + XGBoost 📈")
 
-# آدرس فایل ترندز در GitHub
-GITHUB_TRENDS_CSV_URL = (
+# Constants
+github_trends_url = (
     'https://raw.githubusercontent.com/AZFARHAD24511/exchange_rates_IRAN/main/'
-    'predict/google_trends_daily.csv'
+    'predict/google_trends_daily_exrusd.csv'
 )
 KEYWORDS = ['خرید دلار', 'فروش دلار', 'دلار فردایی']
 
-# بارگذاری داده‌های دلار آزاد از API
-@st.cache_data(ttl=3600)
+# Data loading functions
 def load_usd_data():
     ts = int(datetime.now().timestamp() * 1000)
-    url = (
-        f"https://api.tgju.org/v1/market/indicator/"
-        f"summary-table-data/price_dollar_rl?period=all&mode=full&ts={ts}"
-    )
+    url = f"https://api.tgju.org/v1/market/indicator/summary-table-data/price_dollar_rl?period=all&mode=full&ts={ts}"
     r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-    data = r.json().get('data', [])
     records = []
-    for row in data:
+    for row in r.json().get('data', []):
         try:
-            price = float(
-                row[0].replace(',', '')
-                      .replace('<span class="high" dir="ltr">', '')
-                      .replace('</span>', '')
-            )
+            price = float(re.sub(r'<[^>]*>', '', row[0]).replace(',', ''))
             date = datetime.strptime(row[6], "%Y/%m/%d")
             records.append({'date': date, 'price': price})
         except:
             continue
-    df = pd.DataFrame(records).set_index('date').sort_index()
-    return df
+    return pd.DataFrame(records).set_index('date').sort_index()
 
-# بارگذاری داده‌های Google Trends از GitHub
-@st.cache_data(ttl=3600)
 def load_trends_csv():
-    r = requests.get(GITHUB_TRENDS_CSV_URL)
+    r = requests.get(github_trends_url)
     df = pd.read_csv(StringIO(r.text), parse_dates=['date'])
     return df.set_index('date').sort_index()
 
-# گرفتن داده‌های ناقص Google Trends
-@st.cache_data(
-    ttl=3600,
-    hash_funcs={pd.DatetimeIndex: lambda idx: idx.astype(str).tolist()}
-)
+@st.cache_data(ttl=3600)
 def fetch_missing_trends(missing_dates, geo='IR'):
-    if not isinstance(missing_dates, pd.DatetimeIndex):
-        missing_dates = pd.to_datetime(list(missing_dates))
     pytrends = TrendReq(hl='fa', tz=330)
     df_list = []
     start, end = missing_dates.min(), missing_dates.max()
@@ -82,167 +65,122 @@ def fetch_missing_trends(missing_dates, geo='IR'):
         return df_new.apply(lambda x: x / x.max() * 100)
     return pd.DataFrame(index=missing_dates)
 
-# ایجاد ویژگی‌های زمانی برای مدل XGBoost
-def create_features(df, target, lags=7):
-    df = df.copy()
-    
-    # ایجاد تاخیرها
-    for lag in range(1, lags + 1):
-        df[f'lag_{lag}'] = target.shift(lag)
-    
-    # ویژگی‌های زمانی
-    df['day_of_week'] = df.index.dayofweek
-    df['day_of_month'] = df.index.day
-    df['month'] = df.index.month
-    df['year'] = df.index.year
-    
-    # میانگین متحرک
-    df['rolling_7d_mean'] = target.rolling(window=7).mean()
-    df['rolling_30d_mean'] = target.rolling(window=30).mean()
-    
-    # نوسان
-    df['rolling_7d_std'] = target.rolling(window=7).std()
-    
-    # حذف مقادیر NaN
-    df = df.dropna()
-    
-    return df
-
-# بارگذاری و ترکیب داده‌ها
-with st.spinner("در حال بارگذاری داده‌ها و آموزش مدل XGBoost..."):
+# Load data
+with st.spinner("در حال بارگذاری داده‌ها..."):
     usd_df = load_usd_data()
     trends_df = load_trends_csv()
-    
-    # استفاده از دو سال اخیر
-    two_years_ago = datetime.now() - timedelta(days=730)
-    usd_df = usd_df[usd_df.index >= two_years_ago]
-    trends_df = trends_df[trends_df.index >= two_years_ago]
-    
-    # پر کردن تاریخ‌های ناقص
-    missing = usd_df.index.difference(trends_df.index)
-    if not missing.empty:
-        missing_tuple = tuple(date.strftime('%Y-%m-%d') for date in missing)
-        new_trends = fetch_missing_trends(missing_tuple)
-        trends_df = pd.concat([trends_df, new_trends]).sort_index()
-        trends_df = trends_df.reindex(usd_df.index).ffill().bfill()
-    
-    # ادغام داده‌ها
-    df = pd.merge(usd_df, trends_df, left_index=True, right_index=True, how='inner').ffill().bfill()
-    
-    # ایجاد ویژگی‌ها
-    full_df = create_features(df, df['price'], lags=7)
-    
-    # جداسازی ویژگی‌ها و هدف
-    X = full_df.drop(columns=['price'])
-    y = full_df['price']
-    
-    # تقسیم داده‌ها
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, shuffle=False
-    )
-    
-    # نرمال‌سازی داده‌ها
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    # آموزش مدل XGBoost
-    model = xgb.XGBRegressor(
-        objective='reg:squarederror',
-        n_estimators=1000,
-        learning_rate=0.01,
-        max_depth=5,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        early_stopping_rounds=50,
-        random_state=42
-    )
-    
-    model.fit(
-        X_train_scaled, y_train,
-        eval_set=[(X_train_scaled, y_train), (X_test_scaled, y_test)],
-        verbose=False
-    )
-    
-    # پیش‌بینی روی داده‌های آزمون
-    test_preds = model.predict(X_test_scaled)
-    
-    # محاسبه خطاها
-    mae = mean_absolute_error(y_test, test_preds)
-    mape = mean_absolute_percentage_error(y_test, test_preds) * 100
-    
-    # آماده‌سازی برای پیش‌بینی آینده
-    last_date = df.index[-1]
-    forecast_dates = [last_date + timedelta(days=i) for i in range(1, 3)]
-    
-    # ایجاد DataFrame برای پیش‌بینی
-    forecast_df = pd.DataFrame(index=forecast_dates)
-    
-    # کپی آخرین داده‌های موجود
-    current_data = full_df.iloc[[-1]].copy()
-    
-    # پیش‌بینی گام به گام
-    forecast_vals = []
-    for date in forecast_dates:
-        # به‌روزرسانی ویژگی‌های زمانی
-        current_data.index = [date]
-        current_data['day_of_week'] = date.dayofweek
-        current_data['day_of_month'] = date.day
-        current_data['month'] = date.month
-        current_data['year'] = date.year
-        
-        # پیش‌بینی قیمت
-        current_scaled = scaler.transform(current_data)
-        pred_price = model.predict(current_scaled)[0]
-        forecast_vals.append(pred_price)
-        
-        # به‌روزرسانی تاخیرها برای گام بعدی
-        for lag in range(7, 1, -1):
-            current_data[f'lag_{lag}'] = current_data[f'lag_{lag-1}']
-        current_data['lag_1'] = pred_price
 
-# نمایش نتایج
-st.info(f"دقت مدل XGBoost: MAE: {mae:,.2f}    MAPE: {mape:.2f}%")
-st.success(f"🔮 نرخ دلار برای {forecast_dates[0].date()}: {forecast_vals[0]:,.0f} ریال")
-st.success(f"🔮 نرخ دلار برای {forecast_dates[1].date()}: {forecast_vals[1]:,.0f} ریال")
+# Prepare 2-year window
+two_years = datetime.now() - timedelta(days=730)
+udf = usd_df[usd_df.index >= two_years]
+trf = trends_df[trends_df.index >= two_years]
 
-# نمایش نمودار
-st.subheader("📊 داده‌های تاریخی و پیش‌بینی ۲ روز آینده")
+# Fill missing trends
+missing = udf.index.difference(trf.index)
+if not missing.empty:
+    trf_missing = fetch_missing_trends(missing)
+    trf = pd.concat([trf, trf_missing]).sort_index().reindex(udf.index).ffill().bfill()
 
-# پیش‌بینی روی کل داده‌ها برای نمایش
-full_preds = model.predict(scaler.transform(X))
-df['predicted'] = np.nan
-df.loc[X.index, 'predicted'] = full_preds
+# Merge
+df = pd.merge(udf, trf, left_index=True, right_index=True, how='inner').ffill().bfill()
+series = df['price']
 
-# ایجاد نمودار
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.plot(df.index, df['price'], label='داده‌های تاریخی', color='blue')
-ax.plot(df.index, df['predicted'], label='پیش‌بینی مدل (داده آموزشی)', color='green', alpha=0.7)
+# Feature engineering for XGB
+def make_exog(data, lags=7):
+    exog = pd.DataFrame(index=data.index)
+    # lagged price features
+    for i in range(1, lags+1):
+        exog[f'lag_{i}'] = data.shift(i)
+    # rolling stats
+    exog['roll_mean_7'] = data.shift(1).rolling(7).mean()
+    exog['roll_std_7'] = data.shift(1).rolling(7).std()
+    # date part
+    exog['dow'] = data.index.dayofweek
+    exog['day'] = data.index.day
+    exog['month'] = data.index.month
+    # trends
+    for kw in KEYWORDS:
+        exog[kw] = df[kw]
+    exog = exog.dropna()
+    return exog
 
-# افزودن پیش‌بینی آینده
-forecast_df = pd.DataFrame({
-    'date': forecast_dates,
-    'price': forecast_vals
-}).set_index('date')
+exog = make_exog(series, lags=7)
+y_aligned = series.loc[exog.index]
 
-ax.plot(forecast_df.index, forecast_df['price'], 'ro-', label='پیش‌بینی آینده')
+# Train-test split by time index
+split = int(len(exog)*0.8)
+train_exog = exog.iloc[:split]
+test_exog = exog.iloc[split:]
+train_y = y_aligned.iloc[:split]
+test_y = y_aligned.iloc[split:]
 
-# تنظیمات نمودار
-ax.axvline(last_date, linestyle='--', color='gray')
-ax.set_title('پیش‌بینی نرخ دلار آزاد با XGBoost')
-ax.set_xlabel('تاریخ')
-ax.set_ylabel('نرخ دلار (ریال)')
-ax.grid(True)
+# 1. Fit SARIMAX on train
+sarimax = sm.tsa.SARIMAX(
+    train_y,
+    order=(1,1,1),
+    seasonal_order=(1,0,1,12),
+    exog=train_exog
+).fit(disp=False)
+train_pred_arima = sarimax.fittedvalues
+residuals = train_y - train_pred_arima
+
+# 2. Train XGB on residuals
+xgb = XGBRegressor(
+    n_estimators=500,
+    learning_rate=0.05,
+    max_depth=4,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    random_state=42
+)
+xgb.fit(train_exog, residuals)
+
+# 3. Predict test
+arima_pred_test = sarimax.predict(start=test_exog.index[0], end=test_exog.index[-1], exog=test_exog)
+xgb_pred_test = xgb.predict(test_exog)
+final_pred = arima_pred_test + xgb_pred_test
+
+# Metrics
+mae = mean_absolute_error(test_y, final_pred)
+mape = mean_absolute_percentage_error(test_y, final_pred) * 100
+
+# Forecast next 2 days
+last_exog = exog.iloc[-7:].copy()
+next_exogs = []
+for i in range(1,3):
+    date = df.index[-1] + timedelta(days=i)
+    row = {}
+    # update lags\m    for j in range(1,8):
+        row[f'lag_{j}'] = (list(last_exog['lag_' + str(j-1)])[-1] if j>1 else final_pred.iloc[-1])
+    # rolling
+    row['roll_mean_7'] = final_pred.iloc[-7:].mean()
+    row['roll_std_7'] = final_pred.iloc[-7:].std()
+    row['dow'] = date.dayofweek
+    row['day'] = date.day
+    row['month'] = date.month
+    for kw in KEYWORDS:
+        row[kw] = df[kw].iloc[-1]
+    next_exogs.append((date, row))
+next_df = pd.DataFrame({d:pd.Series(r) for d,r in next_exogs}).T
+next_df.index = [d for d,_ in next_exogs]
+# ARIMA forecast
+arima_fut = sarimax.predict(start=next_df.index[0], end=next_df.index[-1], exog=next_df)
+xgb_fut = xgb.predict(next_df)
+future_pred = arima_fut + xgb_fut
+
+# Display
+st.info(f"MAE: {mae:.2f}   MAPE: {mape:.2f}%")
+for d,p in zip(future_pred.index, future_pred.values):
+    st.success(f"🔮 نرخ دلار برای {d.date()}: {p:.0f} ریال")
+
+# Plot
+st.subheader("📊 Historical vs ARIMA+XGB Fit & Forecast")
+fig,ax = plt.subplots(figsize=(12,6))
+ax.plot(series, label='Historical')
+ax.plot(train_pred_arima + xgb.predict(train_exog), label='Train Fit')
+ax.plot(final_pred.index, final_pred, label='Test Prediction')
+ax_plot_dates = future_pred.index
+ax.scatter(ax_plot_dates, future_pred, color='red')
+ax.axvline(series.index[split], ls='--', c='gray')
 ax.legend()
-
-# نمایش نمودار در Streamlit
 st.pyplot(fig)
-
-# نمایش اهمیت ویژگی‌ها
-st.subheader("📊 اهمیت ویژگی‌ها در مدل XGBoost")
-
-# ایجاد نمودار اهمیت ویژگی‌ها
-fig2, ax2 = plt.subplots(figsize=(10, 6))
-xgb.plot_importance(model, ax=ax2, max_num_features=15)
-ax2.set_title('اهمیت ویژگی‌ها')
-st.pyplot(fig2)
