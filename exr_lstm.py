@@ -32,7 +32,10 @@ KEYWORDS = ['خرید دلار', 'فروش دلار', 'دلار فردایی']
 # Data loading functions
 def load_usd_data():
     ts = int(datetime.now().timestamp() * 1000)
-    url = f"https://api.tgju.org/v1/market/indicator/summary-table-data/price_dollar_rl?period=all&mode=full&ts={ts}"
+    url = (
+        f"https://api.tgju.org/v1/market/indicator/"
+        f"summary-table-data/price_dollar_rl?period=all&mode=full&ts={ts}"
+    )
     r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
     records = []
     for row in r.json().get('data', []):
@@ -104,7 +107,7 @@ def make_exog(data, lags=7):
     exog = exog.dropna()
     return exog
 
-exog = make_exog(series, lags=7)
+exog = make_exog(series)
 y_aligned = series.loc[exog.index]
 
 # Train-test split by time index
@@ -125,7 +128,7 @@ train_pred_arima = sarimax.fittedvalues
 residuals = train_y - train_pred_arima
 
 # 2. Train XGB on residuals
-xgb = XGBRegressor(
+xgb_model = XGBRegressor(
     n_estimators=500,
     learning_rate=0.05,
     max_depth=4,
@@ -133,11 +136,11 @@ xgb = XGBRegressor(
     colsample_bytree=0.8,
     random_state=42
 )
-xgb.fit(train_exog, residuals)
+xgb_model.fit(train_exog, residuals)
 
 # 3. Predict test
 arima_pred_test = sarimax.predict(start=test_exog.index[0], end=test_exog.index[-1], exog=test_exog)
-xgb_pred_test = xgb.predict(test_exog)
+xgb_pred_test = xgb_model.predict(test_exog)
 final_pred = arima_pred_test + xgb_pred_test
 
 # Metrics
@@ -145,42 +148,47 @@ mae = mean_absolute_error(test_y, final_pred)
 mape = mean_absolute_percentage_error(test_y, final_pred) * 100
 
 # Forecast next 2 days
-last_exog = exog.iloc[-7:].copy()
-next_exogs = []
-for i in range(1,3):
+last_exog = exog.tail(7).copy()
+future_exogs = []
+for i in range(1, 3):
     date = df.index[-1] + timedelta(days=i)
     row = {}
-    # update lags\m    for j in range(1,8):
-        row[f'lag_{j}'] = (list(last_exog['lag_' + str(j-1)])[-1] if j>1 else final_pred.iloc[-1])
-    # rolling
-    row['roll_mean_7'] = final_pred.iloc[-7:].mean()
-    row['roll_std_7'] = final_pred.iloc[-7:].std()
+    # update lags
+    for j in range(1, 8):
+        if j < 7:
+            row[f'lag_{j}'] = last_exog[f'lag_{j+1}'].iloc[-1]
+        else:
+            row['lag_7'] = final_pred.iloc[-1]
+    # rolling stats
+    row['roll_mean_7'] = final_pred.tail(7).mean()
+    row['roll_std_7'] = final_pred.tail(7).std()
+    # date features
     row['dow'] = date.dayofweek
     row['day'] = date.day
     row['month'] = date.month
+    # trends
     for kw in KEYWORDS:
         row[kw] = df[kw].iloc[-1]
-    next_exogs.append((date, row))
-next_df = pd.DataFrame({d:pd.Series(r) for d,r in next_exogs}).T
-next_df.index = [d for d,_ in next_exogs]
-# ARIMA forecast
-arima_fut = sarimax.predict(start=next_df.index[0], end=next_df.index[-1], exog=next_df)
-xgb_fut = xgb.predict(next_df)
-future_pred = arima_fut + xgb_fut
+    future_exogs.append((date, row))
+future_df = pd.DataFrame({d: pd.Series(r) for d, r in future_exogs}).T
+future_df.index = [d for d, _ in future_exogs]
+
+arima_future = sarimax.predict(start=future_df.index[0], end=future_df.index[-1], exog=future_df)
+xgb_future = xgb_model.predict(future_df)
+future_pred = arima_future + xgb_future
 
 # Display
 st.info(f"MAE: {mae:.2f}   MAPE: {mape:.2f}%")
-for d,p in zip(future_pred.index, future_pred.values):
+for d, p in zip(future_pred.index, future_pred.values):
     st.success(f"🔮 نرخ دلار برای {d.date()}: {p:.0f} ریال")
 
 # Plot
 st.subheader("📊 Historical vs ARIMA+XGB Fit & Forecast")
-fig,ax = plt.subplots(figsize=(12,6))
+fig, ax = plt.subplots(figsize=(12, 6))
 ax.plot(series, label='Historical')
-ax.plot(train_pred_arima + xgb.predict(train_exog), label='Train Fit')
-ax.plot(final_pred.index, final_pred, label='Test Prediction')
-ax_plot_dates = future_pred.index
-ax.scatter(ax_plot_dates, future_pred, color='red')
-ax.axvline(series.index[split], ls='--', c='gray')
+ax.plot(train_pred_arima + xgb_model.predict(train_exog), label='Train Fit', alpha=0.7)
+ax.plot(final_pred.index, final_pred, label='Test Prediction', alpha=0.9)
+ax.scatter(future_pred.index, future_pred, color='red', label='Forecast')
+ax.axvline(series.index[split], ls='--', color='gray')
 ax.legend()
 st.pyplot(fig)
