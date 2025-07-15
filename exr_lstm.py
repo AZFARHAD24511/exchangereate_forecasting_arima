@@ -88,8 +88,8 @@ if not missing.empty:
 df = pd.merge(udf, trf, left_index=True, right_index=True, how='inner').ffill().bfill()
 series = df['price']
 
-# Feature engineering for XGB
-def make_exog(data, lags=7):
+# Feature engineering for ARIMA and XGB
+def make_exog(df, data, lags=7):
     exog = pd.DataFrame(index=data.index)
     # lagged price features
     for i in range(1, lags+1):
@@ -97,21 +97,22 @@ def make_exog(data, lags=7):
     # rolling stats
     exog['roll_mean_7'] = data.shift(1).rolling(7).mean()
     exog['roll_std_7'] = data.shift(1).rolling(7).std()
-    # date part
+    # date parts
     exog['dow'] = data.index.dayofweek
     exog['day'] = data.index.day
     exog['month'] = data.index.month
-    # trends
+    # Google Trends (if available)
     for kw in KEYWORDS:
-        exog[kw] = df[kw]
+        if kw in df.columns:
+            exog[kw] = df[kw]
     exog = exog.dropna()
     return exog
 
-exog = make_exog(series)
+exog = make_exog(df, series)
 y_aligned = series.loc[exog.index]
 
 # Train-test split by time index
-split = int(len(exog)*0.8)
+split = int(len(exog) * 0.8)
 train_exog = exog.iloc[:split]
 test_exog = exog.iloc[split:]
 train_y = y_aligned.iloc[:split]
@@ -139,7 +140,11 @@ xgb_model = XGBRegressor(
 xgb_model.fit(train_exog, residuals)
 
 # 3. Predict test
-arima_pred_test = sarimax.predict(start=test_exog.index[0], end=test_exog.index[-1], exog=test_exog)
+arima_pred_test = sarimax.predict(
+    start=test_exog.index[0],
+    end=test_exog.index[-1],
+    exog=test_exog
+)
 xgb_pred_test = xgb_model.predict(test_exog)
 final_pred = arima_pred_test + xgb_pred_test
 
@@ -168,12 +173,17 @@ for i in range(1, 3):
     row['month'] = date.month
     # trends
     for kw in KEYWORDS:
-        row[kw] = df[kw].iloc[-1]
+        if kw in df.columns:
+            row[kw] = df[kw].iloc[-1]
     future_exogs.append((date, row))
 future_df = pd.DataFrame({d: pd.Series(r) for d, r in future_exogs}).T
 future_df.index = [d for d, _ in future_exogs]
 
-arima_future = sarimax.predict(start=future_df.index[0], end=future_df.index[-1], exog=future_df)
+arima_future = sarimax.predict(
+    start=future_df.index[0],
+    end=future_df.index[-1],
+    exog=future_df
+)
 xgb_future = xgb_model.predict(future_df)
 future_pred = arima_future + xgb_future
 
