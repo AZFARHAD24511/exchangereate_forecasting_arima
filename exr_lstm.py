@@ -10,7 +10,6 @@ from pytrends.request import TrendReq
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 import statsmodels.api as sm
 from xgboost import XGBRegressor
-from sklearn.model_selection import TimeSeriesSplit
 
 # Streamlit config
 st.set_page_config(page_title="پیش‌بینی نرخ دلار آزاد با ARIMA + XGBoost 📈", layout="wide")
@@ -74,34 +73,34 @@ with st.spinner("در حال بارگذاری داده‌ها..."):
     trends_df = load_trends_csv()
 
 # Prepare 2-year window
-two_years = datetime.now() - timedelta(days=730)
-udf = usd_df[usd_df.index >= two_years]
-trf = trends_df[trends_df.index >= two_years]
+two_years_ago = datetime.now() - timedelta(days=730)
+udf = usd_df[usd_df.index >= two_years_ago]
+trf = trends_df[trends_df.index >= two_years_ago]
 
 # Fill missing trends
-missing = udf.index.difference(trf.index)
+missing = udf.index.difference(trf.index) if (udf := udf if 'udf' in locals() else udf) else udf.index.difference(trf.index)
 if not missing.empty:
     trf_missing = fetch_missing_trends(missing)
     trf = pd.concat([trf, trf_missing]).sort_index().reindex(udf.index).ffill().bfill()
 
-# Merge
+# Merge datasets
 df = pd.merge(udf, trf, left_index=True, right_index=True, how='inner').ffill().bfill()
 series = df['price']
 
-# Feature engineering for ARIMA and XGB
+# Feature engineering for ARIMA + XGB
 def make_exog(df, data, lags=7):
     exog = pd.DataFrame(index=data.index)
-    # lagged price features
+    # lag features
     for i in range(1, lags+1):
         exog[f'lag_{i}'] = data.shift(i)
-    # rolling stats
+    # rolling statistics
     exog['roll_mean_7'] = data.shift(1).rolling(7).mean()
     exog['roll_std_7'] = data.shift(1).rolling(7).std()
     # date parts
     exog['dow'] = data.index.dayofweek
     exog['day'] = data.index.day
     exog['month'] = data.index.month
-    # Google Trends (if available)
+    # Google Trends
     for kw in KEYWORDS:
         if kw in df.columns:
             exog[kw] = df[kw]
@@ -111,24 +110,25 @@ def make_exog(df, data, lags=7):
 exog = make_exog(df, series)
 y_aligned = series.loc[exog.index]
 
-# Train-test split by time index
-split = int(len(exog) * 0.8)
+# Train-test split
+total = len(exog)
+split = int(total * 0.8)
 train_exog = exog.iloc[:split]
 test_exog = exog.iloc[split:]
 train_y = y_aligned.iloc[:split]
 test_y = y_aligned.iloc[split:]
 
-# 1. Fit SARIMAX on train
+# 1) Fit SARIMAX
 sarimax = sm.tsa.SARIMAX(
     train_y,
     order=(1,1,1),
     seasonal_order=(1,0,1,12),
     exog=train_exog
 ).fit(disp=False)
-train_pred_arima = sarimax.fittedvalues
-residuals = train_y - train_pred_arima
+train_arima_fit = sarimax.fittedvalues
+residuals = train_y - train_arima_fit
 
-# 2. Train XGB on residuals
+# 2) Train XGBoost on residuals
 xgb_model = XGBRegressor(
     n_estimators=500,
     learning_rate=0.05,
@@ -139,16 +139,12 @@ xgb_model = XGBRegressor(
 )
 xgb_model.fit(train_exog, residuals)
 
-# 3. Predict test
-arima_pred_test = sarimax.predict(
-    start=test_exog.index[0],
-    end=test_exog.index[-1],
-    exog=test_exog
-)
-xgb_pred_test = xgb_model.predict(test_exog)
-final_pred = arima_pred_test + xgb_pred_test
+# 3) Predict on test
+arima_test = sarimax.predict(start=test_exog.index[0], end=test_exog.index[-1], exog=test_exog.values)
+xgb_test = xgb_model.predict(test_exog)
+final_pred = pd.Series(arima_test + xgb_test, index=test_exog.index)
 
-# Metrics
+# Evaluation
 mae = mean_absolute_error(test_y, final_pred)
 mape = mean_absolute_percentage_error(test_y, final_pred) * 100
 
@@ -179,15 +175,11 @@ for i in range(1, 3):
 future_df = pd.DataFrame({d: pd.Series(r) for d, r in future_exogs}).T
 future_df.index = [d for d, _ in future_exogs]
 
-arima_future = sarimax.predict(
-    start=future_df.index[0],
-    end=future_df.index[-1],
-    exog=future_df
-)
+arima_future = sarimax.predict(start=future_df.index[0], end=future_df.index[-1], exog=future_df.values)
 xgb_future = xgb_model.predict(future_df)
-future_pred = arima_future + xgb_future
+future_pred = pd.Series(arima_future + xgb_future, index=future_df.index)
 
-# Display
+# Display results
 st.info(f"MAE: {mae:.2f}   MAPE: {mape:.2f}%")
 for d, p in zip(future_pred.index, future_pred.values):
     st.success(f"🔮 نرخ دلار برای {d.date()}: {p:.0f} ریال")
@@ -196,7 +188,7 @@ for d, p in zip(future_pred.index, future_pred.values):
 st.subheader("📊 Historical vs ARIMA+XGB Fit & Forecast")
 fig, ax = plt.subplots(figsize=(12, 6))
 ax.plot(series, label='Historical')
-ax.plot(train_pred_arima + xgb_model.predict(train_exog), label='Train Fit', alpha=0.7)
+ax.plot(train_arima_fit + xgb_model.predict(train_exog), label='Train Fit', alpha=0.7)
 ax.plot(final_pred.index, final_pred, label='Test Prediction', alpha=0.9)
 ax.scatter(future_pred.index, future_pred, color='red', label='Forecast')
 ax.axvline(series.index[split], ls='--', color='gray')
