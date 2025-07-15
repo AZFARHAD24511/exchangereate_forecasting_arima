@@ -78,12 +78,12 @@ udf = usd_df[usd_df.index >= two_years_ago]
 trf = trends_df[trends_df.index >= two_years_ago]
 
 # Fill missing trends
-missing = udf.index.difference(trf.index) if (udf := udf if 'udf' in locals() else udf) else udf.index.difference(trf.index)
+missing = udf.index.difference(trf.index)
 if not missing.empty:
     trf_missing = fetch_missing_trends(missing)
     trf = pd.concat([trf, trf_missing]).sort_index().reindex(udf.index).ffill().bfill()
 
-# Merge datasets
+# Merge datasets datasets
 df = pd.merge(udf, trf, left_index=True, right_index=True, how='inner').ffill().bfill()
 series = df['price']
 
