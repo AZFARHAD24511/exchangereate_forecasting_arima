@@ -12,11 +12,14 @@ from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
 
 st.set_page_config(page_title="پیش‌بینی نرخ دلار آزاد تهران 📈", layout="wide")
 st.markdown("""
----
-📈 © 2025 Dr. Farhadi. All rights reserved.  
-This application was developed by **Dr. Farhadi**, Ph.D. in *Economics (Econometrics)* and *Data Science*.  
+<hr>
+<div style='font-size: 16px;'>
+📈 <strong>© 2025 Dr. Farhadi. All rights reserved.</strong><br>
+This application was developed by <strong>Dr. Farhadi</strong>, Ph.D. in <em>Economics (Econometrics)</em> and <em>Data Science</em>.<br>
 All trademarks and intellectual property are protected. ™
-""")
+</div>
+""", unsafe_allow_html=True)
+
 st.title("📈 پیش‌بینی نرخ دلار آزاد 📈")
 
 # آدرس فایل ترندز در GitHub
