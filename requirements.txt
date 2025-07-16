@@ -6,3 +6,5 @@ requests>=2.28.2
 scikit-learn>=1.2.2
 pytrends==4.9.2
 tensorflow>=2.14.0,<2.15.0
+arabic-reshaper>=3.0.0
+bidi>=0.4.2
