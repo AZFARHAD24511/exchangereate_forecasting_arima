@@ -1,10 +1,20 @@
-streamlit>=1.33.0
-pandas>=1.5.3
-numpy>=1.23.5
-matplotlib>=3.7.0
-requests>=2.28.2
-scikit-learn>=1.2.2
-pytrends==4.9.2
-tensorflow>=2.14.0,<2.15.0
-arabic-reshaper>=3.0.0
-bidi>=0.4.2
+# اجرای روی Python 3.8+
+python>=3.8
+
+# فریم‌ورک و پردازش داده
+streamlit>=1.20.0
+pandas>=1.5.0
+numpy>=1.23.0
+
+# رسم نمودار
+matplotlib>=3.5.0
+
+# دریافت داده از وب
+requests>=2.28.0
+
+# Google Trends
+pytrends>=4.9.0
+
+# مدل‌سازی و ارزیابی
+scikit-learn>=1.1.0
+
