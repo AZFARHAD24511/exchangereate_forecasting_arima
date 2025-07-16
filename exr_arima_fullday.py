@@ -25,9 +25,14 @@ st.title("📈 پیش‌بینی نرخ دلار آزاد 📈")
 # آدرس فایل ترندز در GitHub
 GITHUB_TRENDS_CSV_URL = (
     'https://raw.githubusercontent.com/AZFARHAD24511/exchange_rates_IRAN/main/'
-    'predict/google_trends_daily.csv'
+    'predict/google_trends_daily_exrusd_15.csv'
 )
-KEYWORDS = ['خرید دلار', 'فروش دلار', 'دلار فردایی']
+# KEYWORDS = ['خرید دلار', 'فروش دلار', 'دلار فردایی']
+KEYWORDS = [
+    'خرید دلار', 'فروش دلار', 'دلار فردا', 'نرخ ارز', 'سکه طلا',
+    'صرافی آنلاین', 'تورم', 'انتخابات', 'اعتراضات', 'تحریم',
+    'برجام', 'رئیس‌جمهور', 'انفجار', 'ترور', 'حمله', 'جنگ'
+]
 
 @st.cache_data(ttl=3600)
 def load_usd_data():
