@@ -1,9 +1,21 @@
-streamlit>=1.32
-pandas>=1.5
-numpy>=1.23
-matplotlib>=3.6
-requests>=2.28
-pytrends>=4.9
-statsmodels>=0.14
-xgboost>=1.7
-scikit-learn>=1.2
+# Core requirements
+streamlit>=1.33.0
+pandas>=1.5.3
+numpy>=1.23.5
+matplotlib>=3.7.0
+requests>=2.28.2
+scikit-learn>=1.2.2
+
+# Google Trends
+pytrends==4.9.2
+
+# TensorFlow (compatible with Python 3.11)
+tensorflow>=2.14.0
+
+# Other utilities
+bidi>=0.4.2       # If using Arabic/Persian reshaping (optional)
+arabic-reshaper>=3.0.0  # Optional, only if used
+
+# Optional: For robust compatibility and reproducibility
+python-dotenv>=1.0.0
+
