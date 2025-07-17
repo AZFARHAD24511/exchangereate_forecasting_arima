@@ -120,6 +120,15 @@ Please cite this work as:
 
 > Farhadi, A. (2025). *Forecasting USD/IRR Exchange Rate using Google Trends and ARIMA*. GitHub. [https://github.com/AZFARHAD24511/exchangereate\_forecasting\_arima](https://github.com/AZFARHAD24511/exchangereate_forecasting_arima)
 
----
 
-If you'd like, I can also generate a PDF or add this to a `README.md` in your GitHub repo directly. Let me know!
+
+## 🔗 Live Forecast Application
+
+To **see the live output of the forecasting algorithm**, please visit the following link:
+
+👉 [https://exrpredarimafullday.streamlit.app/](https://exrpredarimafullday.streamlit.app/)
+
+By clicking the link, the app will generate a **real-time 2-day forecast** for the USD/IRR exchange rate based on the most recent market and trend data.
+All computations (data fetching, interpolation, model fitting, and prediction) are performed on-the-fly upon page load.
+
+
