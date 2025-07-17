@@ -118,7 +118,7 @@ $$\text{MAPE} = \frac{100}{T} \sum_{t=1}^T \left| \frac{y_t - \hat{y}_t}{y_t} \r
 You are free to use or adapt the content of this repository **with proper attribution**.
 Please cite this work as:
 
-> Farhadi, A. (2025). *Forecasting USD/IRR Exchange Rate using Google Trends and ARIMA*. GitHub. [https://github.com/AZFARHAD24511/exchange\_rates\_IRAN](https://github.com/AZFARHAD24511/exchange_rates_IRAN)
+> Farhadi, A. (2025). *Forecasting USD/IRR Exchange Rate using Google Trends and ARIMA*. GitHub. [https://github.com/AZFARHAD24511/exchangereate\_forecasting\_arima](https://github.com/AZFARHAD24511/exchangereate_forecasting_arima)
 
 ---
 
