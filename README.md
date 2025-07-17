@@ -47,6 +47,36 @@ We define an auxiliary matrix $X_t \in \mathbb{R}^{n \times T}$ representing nor
  'برجام', 'رئیس‌جمهور', 'انفجار', 'ترور', 'جنگ']
 ```
 
+
+## 🗝️ Keywords Used from Google Trends
+
+To enhance forecasting accuracy and capture market sentiment, this application leverages daily search trends of **15 carefully selected Persian keywords**, all of which are relevant to public expectations, political risks, and economic uncertainty in Iran.
+
+Below is a translation and explanation of each keyword:
+
+| #  | Persian Keyword | English Translation              | Contextual Meaning                               |
+| -- | --------------- | -------------------------------- | ------------------------------------------------ |
+| 1  | خرید دلار       | buying US dollars                | Indicates increased demand for foreign currency  |
+| 2  | فروش دلار       | selling US dollars               | Signals supply behavior or market exits          |
+| 3  | دلار فردا       | next-day dollar / forward dollar | Speculative interest in future USD prices        |
+| 4  | نرخ ارز         | exchange rate                    | General concern about currency value             |
+| 5  | سکه طلا         | gold coin                        | Alternative asset demand                         |
+| 6  | صرافی آنلاین    | online currency exchange         | Public access to unofficial forex markets        |
+| 7  | تورم            | inflation                        | Economic instability and devaluation fears       |
+| 8  | انتخابات        | elections                        | Political uncertainty and policy shifts          |
+| 9  | اعتراضات        | protests                         | Social unrest and domestic risk factors          |
+| 10 | تحریم           | sanctions                        | External pressure and geopolitical effects       |
+| 11 | برجام           | JCPOA (Iran nuclear deal)        | Search interest in nuclear diplomacy             |
+| 12 | رئیس‌جمهور      | president                        | Leadership changes and political expectations    |
+| 13 | انفجار          | explosion                        | Security incidents and geopolitical tensions     |
+| 14 | ترور            | assassination / terrorist attack | High-impact political/security events            |
+| 15 | جنگ             | war                              | Extreme geopolitical risk (e.g. Israel, US-Iran) |
+
+These keywords are monitored daily using the **Google Trends API** via the [PyTrends](https://github.com/GeneralMills/pytrends) interface. The scores are normalized between 0–100 and used for smoothing, imputation, and context-aware modeling decisions.
+
+
+
+
 Daily scores are normalized:
 
 $$
