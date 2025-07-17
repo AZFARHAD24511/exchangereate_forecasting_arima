@@ -16,7 +16,7 @@ st.markdown("""
 <div style='font-size: 20px;'>
 📈 <strong>© 2025 Dr. Farhadi. All rights reserved.</strong><br>
 This application was developed by <strong>Dr. Farhadi</strong>, Ph.D. in <em>Economics (Econometrics)</em> and <em>Data Science</em>.<br>
-All trademarks and intellectual property are protected(RF). ™
+All trademarks and intellectual property are protected(ARIMA). ™
 </div>
 """, unsafe_allow_html=True)
 
