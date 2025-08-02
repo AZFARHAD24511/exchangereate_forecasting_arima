@@ -5,6 +5,7 @@ import requests
 import re
 import random
 import functools
+import arabic_reshaper
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -16,7 +17,8 @@ st.set_page_config(page_title="پیش‌بینی دلار", layout="wide")
 # -----------------------------
 # بخش داده و پیش‌بینی
 # -----------------------------
-
+def _(text):
+    return get_display(arabic_reshaper.reshape(text))
 @functools.lru_cache(maxsize=1)
 def load_usd_data():
     ts = int(datetime.now().timestamp() * 1000)
@@ -182,7 +184,7 @@ if menu == "پیش‌بینی":
     ax.plot(df.index, df['price'], label="قیمت واقعی")
     for d, v in preds.items():
         ax.scatter(pd.to_datetime(d), v, color='red', label="پیش‌بینی" if d == list(preds.keys())[0] else "")
-    ax.set_title("نمودار قیمت دلار و پیش‌بینی")
+    ax.set_title(_('نمودار قیمت دلار و پیش‌بینی'))
     ax.grid(True)
     ax.legend()
     st.pyplot(fig)
