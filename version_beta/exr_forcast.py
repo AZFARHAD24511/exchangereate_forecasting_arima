@@ -184,8 +184,8 @@ if menu == "پیش‌بینی":
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(df.index, df['price'], label="قیمت واقعی")
     for d, v in preds.items():
-        ax.scatter(pd.to_datetime(d), v, color='red', label="پیش‌بینی" if d == list(preds.keys())[0] else "")
-    ax.set_title(_('مقایسه نرخ دلار آزاد و نیما'))
+        ax.scatter(pd.to_datetime(d), v, color='red', label=_('پیش بینی') if d == list(preds.keys())[0] else "")
+    ax.set_title(_('روند نرخ دلار آزاد '))
     ax.grid(True)
     ax.legend()
     st.pyplot(fig)
