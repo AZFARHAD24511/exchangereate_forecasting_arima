@@ -6,4 +6,5 @@ requests
 statsmodels
 scikit-learn
 pytrends
+arabic_reshaper
 
