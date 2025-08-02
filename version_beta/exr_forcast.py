@@ -5,6 +5,7 @@ import requests
 import re
 import random
 import functools
+from bidi.algorithm import get_display
 import arabic_reshaper
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
@@ -184,7 +185,7 @@ if menu == "پیش‌بینی":
     ax.plot(df.index, df['price'], label="قیمت واقعی")
     for d, v in preds.items():
         ax.scatter(pd.to_datetime(d), v, color='red', label="پیش‌بینی" if d == list(preds.keys())[0] else "")
-    ax.set_title(_('نمودار قیمت دلار و پیش‌بینی'))
+    ax.set_title(_('مقایسه نرخ دلار آزاد و نیما'))
     ax.grid(True)
     ax.legend()
     st.pyplot(fig)
