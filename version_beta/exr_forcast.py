@@ -94,20 +94,53 @@ def load_usd_full_table():
         print("خطا در load_usd_full_table:", e)
         return np.nan
 
+# def load_dollar_value():
+#     iran_time = datetime.now(ZoneInfo("Asia/Tehran"))
+#     weekday = iran_time.weekday()  # شنبه = 0، جمعه = 4
+#     hour = iran_time.hour
+
+#     try:
+#         if weekday == 4 or hour < 10 or hour >= 17:
+#             return load_usd_full_table()
+#         else:
+#             return load_today_avg()
+#     except Exception as e:
+#         print("خطا در load_dollar_value:", e)
+#         return np.nan
 def load_dollar_value():
     iran_time = datetime.now(ZoneInfo("Asia/Tehran"))
-    weekday = iran_time.weekday()  # شنبه = 0، جمعه = 4
+    weekday = iran_time.weekday()  # Monday=0, ..., Thursday=3, Friday=4, Saturday=5, Sunday=6
     hour = iran_time.hour
 
     try:
-        if weekday == 4 or hour < 10 or hour >= 17:
-            return load_usd_full_table()
-        else:
-            return load_today_avg()
-    except Exception as e:
-        print("خطا در load_dollar_value:", e)
-        return np.nan
+        # جمعه: همیشه full table
+        if weekday == 4:
+            print("📅 امروز جمعه است، مقدار از جدول کامل گرفته می‌شود.")
+            avg = load_usd_full_table()
 
+        # پنجشنبه: 11 تا 17 آپدیت، بقیه full table
+        elif weekday == 3:
+            if 11 <= hour < 17:
+                print("✅ پنجشنبه و در ساعات به‌روزرسانی (11-17)، میانگین ۵ داده اخیر گرفته می‌شود.")
+                avg = load_today_avg()
+            else:
+                print("📅 پنجشنبه خارج از ساعات به‌روزرسانی (11-17)، مقدار از جدول کامل گرفته می‌شود.")
+                avg = load_usd_full_table()
+
+        # شنبه تا چهارشنبه: 11 تا 20 آپدیت، بقیه full table
+        else:
+            if 11 <= hour < 20:
+                print("✅ روزهای شنبه تا چهارشنبه و در ساعات به‌روزرسانی (11-20)، میانگین ۵ داده اخیر گرفته می‌شود.")
+                avg = load_today_avg()
+            else:
+                print("📅 خارج از ساعات به‌روزرسانی (11-20)، مقدار از جدول کامل گرفته می‌شود.")
+                avg = load_usd_full_table()
+
+        return avg
+
+    except Exception as e:
+        print("❌ خطا در load_dollar_value:", e)
+        return np.nan
 @functools.lru_cache(maxsize=1)
 def load_trends_csv():
     base_url = "https://raw.githubusercontent.com/AZFARHAD24511/GT_datasets/main/data/"
