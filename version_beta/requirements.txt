@@ -6,4 +6,4 @@ requests
 statsmodels
 scikit-learn
 pytrends
-zoneinfo; python_version >= "3.9"
+
